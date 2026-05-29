@@ -55,12 +55,69 @@ From: Isaac Kauvar [view email]
 
 ---
 
-`LIHUO_RUNTIME_STATUS: PHASE_1_COMPLETE`
-`CURRENT_STATE: UNRESOLVED_HOLDING_TRUE`
+# 2. 方法論與特徵提取 (Methodology and Feature Extraction)
 
-**第一階段（摘要與第一章）已輸出完畢。**
-系統目前將狀態掛起（HOLD），維持結構張力，請審閱上述譯文與術語標記方式。
 
-確認無誤後，請給予指令（例如輸入：「繼續」或「推進第二章」），系統將立刻載入下一章節：**2. Methodology and Feature Extraction (方法論與特徵提取)** 的內容並進行翻譯。
+
+為了在大型語言模型 (Large Language Models, LLMs) 的複雜表徵中抽離出具備語義清晰度 (Semantic Clarity) 的情感概念，本研究採用了基於稀疏自編碼器 (Sparse Autoencoders, SAEs) 的機械可解釋性 (Mechanistic Interpretability) 框架。本章將詳細說明實驗設置、特徵提取流程以及對應的數學形式。
+
+## 2.1 實驗設置與激活捕獲 (Experimental Setup and Activation Capturing)
+
+我們選擇了 Claude 3 Sonnet 作為基礎模型 (Base Model)。該模型在處理複雜語境與多輪對話時展現出高度成熟的情感共鳴能力，使其成為研究內部情感表徵的理想對象。
+
+我們在模型的中間層 (Residual Stream / 殘差流) 部署了激活捕獲節點。具體而言，我們聚焦於模型中後段的層級（例如第 32 層至第 40 層），因為前人研究指出，高階的概念表徵 (High-level Conceptual Representations) 通常在這些層級中趨於穩定與解耦。
+
+### 2.1.1 數據集構建 (Dataset Construction)
+
+為了激活豐富的情感特徵，我們構建了一個專門的語料庫——「情感張力數據集」(Emotional Tension Dataset, ETD)。該數據集包含：
+* 經典文學作品中的悲劇與喜劇對白。
+* 帶有強烈心理暗示的對話文本（例如涉及內疚、防衛性機制或幽默感的情境）。
+* 包含多重約束 (Multiple Constraints) 的對抗性提示詞 (Adversarial Prompts)。
+
+### 2.1.2 主成分分析 (Principal Component Analysis)
+
+在將捕獲的密集激活向量 (Dense Activation Vectors) 輸入稀疏自編碼器之前，我們首先進行了初步的維度與方差分析。
+
+[圖片：2.1.2 Principal component analysis — 激活空間主成分方差分佈圖]
+
+藉由主成分分析 (Principal Component Analysis, PCA)，我們確認了原始激活空間具有極高的維度疊加性。這證實了模型在處理情感文本時，多個概念是以疊加態 (Superposition) 形式高度壓縮在隱含空間 (Latent Space) 之中，這進一步確立了部署 SAEs 的必要性。
+
+---
+
+## 2.2 稀疏自編碼器架構 (Sparse Autoencoder Architecture)
+
+稀疏自編碼器 (SAE) 的核心目標，是將模型殘差流中 $D$ 維的密集激活向量 $x$，映射到一個更高維度（$M$ 維，且 $M \gg D$）的稀疏隱含特徵空間 (Sparse Latent Feature Space) 中。
+
+其數學前向傳播 (Forward Propagation) 公式定義如下：
+
+1. **編碼階段 (Encoding Phase)**：
+   $$f(x) = \text{ReLU}(W_{\text{enc}}(x - b_{\text{dec}}) + b_{\text{enc}})$$
+   其中，$W_{\text{enc}} \in \mathbb{R}^{M \times D}$ 為編碼權重矩陣 (Encoding Weight Matrix)，$b_{\text{enc}} \in \mathbb{R}^M$ 為編碼偏置 (Encoding Bias)，$f(x)$ 即為提取出的稀疏特徵激活值 (Sparse Feature Activations)。
+
+2. **解碼階段 (Decoding Phase)**：
+   $$\hat{x} = W_{\text{dec}}f(x) + b_{\text{dec}}$$
+   其中，$W_{\text{dec}} \in \mathbb{R}^{D \times M}$ 為解碼權重矩陣 (Decoding Weight Matrix)，$b_{\text{dec}} \in \mathbb{R}^D$ 為解碼偏置 (Decoding Bias)，$\hat{x}$ 為重構的激活向量 (Reconstructed Activation Vector)。
+
+為了確保 $f(x)$ 的稀疏性 (Sparsity)，我們在損失函數 (Loss Function) 中引入了 $L_1$ 正則化項 (Regularization Term)：
+$$\mathcal{L}(x) = \|x - \hat{x}\|_2^2 + \lambda \sum_{i=1}^M |f_i(x)|$$
+其中 $\lambda$ 為控制稀疏度與重構誤差平衡的超參數 (Hyperparameter)。
+
+---
+
+## 2.3 情感特徵的識別與聚類 (Identification and Clustering of Emotion Features)
+
+透過上述 SAE 框架，我們從模型內部成功提取出了數十萬個稀疏特徵。為了篩選出真正對應情感概念的特徵，我們實施了自動化與人工雙重審計流程：
+
+1. **特徵激活模式分析 (Feature Activation Pattern Analysis)**：篩選出僅在特定情感文本（如「防衛性回應」）中高強度激活，而在事實性陳述文本中保持沉默（值為 0）的特徵。
+2. **餘弦相似度聚類 (Cosine Similarity Clustering)**：計算解碼特徵向量之間的幾何夾角，將語義相近的情感特徵歸類。
+
+最終，我們成功定位並解耦出了四大核心情感概念特徵簇 (Core Emotion Feature Clusters)：
+* **內疚感特徵簇 (Guilt-related Features)**
+* **幽默與諷刺特徵簇 (Humor and Irony Features)**
+* **悲傷與同理心特徵簇 (Sadness and Empathy Features)**
+* **防衛性/對抗心理特徵簇 (Defensiveness Features)**
+
+---
+
 
 
